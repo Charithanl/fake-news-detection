@@ -21,7 +21,7 @@ if not exist "venv\Scripts\uvicorn.exe" (
 )
 
 echo Starting API server in a new window...
-start "Fake News API" cmd /k "cd /d %~dp0 && venv\Scripts\python.exe -m uvicorn api:app --reload"
+start "Fake News API" /D "%~dp0" cmd /k "\"%~dp0venv\Scripts\python.exe\" -m uvicorn api:app --host 127.0.0.1 --port 8000 --reload"
 
 echo Waiting for server startup...
 timeout /t 4 /nobreak >nul

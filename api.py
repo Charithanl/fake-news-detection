@@ -26,9 +26,11 @@ class ExplainRequest(ArticleRequest):
     max_sentences: int = Field(default=12, ge=1, le=50, description="Maximum sentences to analyze")
 
 
-MODEL_DIR = Path("model")
-UI_DIR = Path("ui")
-UI_INDEX = UI_DIR / "index.html"
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_DIR = BASE_DIR / "model"
+PUBLIC_DIR = BASE_DIR / "public"
+UI_DIR = BASE_DIR / "ui"
+UI_INDEX = PUBLIC_DIR / "index.html"
 
 
 def merge_article_text(title: str, text: str) -> str:
@@ -61,9 +63,10 @@ def health_check():
 
 @app.get("/")
 def serve_dashboard():
-    if not UI_INDEX.exists():
+    dashboard_path = UI_INDEX if UI_INDEX.exists() else UI_DIR / "index.html"
+    if not dashboard_path.exists():
         raise HTTPException(status_code=404, detail="UI not found.")
-    return FileResponse(UI_INDEX)
+    return FileResponse(dashboard_path)
 
 
 @app.get("/metadata")
@@ -124,4 +127,3 @@ def explain_article(request: ExplainRequest):
         "analyzed_sentences": len(sentences),
         "truncated_for_explanation": len(split_sentences(text, 10_000)) > len(sentences),
     }
-
