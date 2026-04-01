@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+data/
+model/
+*.pt
+*.bin
+*.h5
+*.ckpt
+*.pkl

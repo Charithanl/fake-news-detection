@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VerifAI - Fake News Detection Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg0:#070d1a;--bg1:#0c1526;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);--border:rgba(255,255,255,.1);--blue:#3d8ef0;--blue2:#5ba3ff;--red:#f04d5b;--green:#3dd68c;--amber:#f0a23d;--text:#dde8f8;--muted:#6b84a8;--slate:#8ba4c8}
+html,body{height:100%;background:radial-gradient(circle at top right,rgba(61,142,240,.18),transparent 25%),linear-gradient(180deg,var(--bg1),var(--bg0));color:var(--text);font-family:'Syne',sans-serif}
+body{overflow:hidden}
+#app{display:flex;height:100vh}
+#sidebar{width:64px;background:rgba(8,14,28,.95);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:8px}
+.logo,.nav-item{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+.logo{background:linear-gradient(135deg,var(--blue),#1a3d8a);margin-bottom:12px}
+.nav-item.active{background:rgba(61,142,240,.18)}
+.nav-item svg,.logo svg{width:18px;height:18px;stroke-width:1.8;fill:none}
+.nav-item svg{stroke:var(--slate)}
+#main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 320px}
+#center,#right{padding:24px;overflow:auto}
+#right{border-left:1px solid var(--border);background:rgba(10,17,31,.92)}
+.top-bar{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+h1{font-size:18px}
+.subtitle,.mono,.label{font-family:'DM Mono',monospace;color:var(--muted);font-size:11px}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{padding:5px 10px;border-radius:999px;border:1px solid var(--border);font:10px 'DM Mono',monospace}
+.pill.live{color:var(--green);border-color:rgba(61,214,140,.3);background:rgba(61,214,140,.08)}
+.pill.info{color:var(--blue2);border-color:rgba(61,142,240,.3);background:rgba(61,142,240,.08)}
+.pill.warn{color:var(--amber);border-color:rgba(240,162,61,.3);background:rgba(240,162,61,.08)}
+.card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:20px;margin-bottom:16px}
+.label{letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
+input,textarea{width:100%;background:rgba(0,0,0,.22);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:12px 14px;font:13px 'Syne',sans-serif;outline:none}
+input:focus,textarea:focus{border-color:var(--blue)}
+textarea{min-height:160px;resize:vertical}
+.stack{display:grid;gap:10px}
+.actions{margin-top:12px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+button{background:linear-gradient(135deg,var(--blue),#1d4fa0);border:none;border-radius:10px;color:#fff;padding:10px 18px;font:600 12px 'Syne',sans-serif;cursor:pointer}
+button:disabled{opacity:.55;cursor:wait}
+.banner{display:none;padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.5;margin-bottom:16px}
+.banner.show{display:block}
+.verdict{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
+#gauge-wrap{position:relative;width:130px;height:130px}
+#gauge-wrap canvas{position:absolute;inset:0}
+.gauge-center{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.gauge-pct{font-size:28px;font-weight:700}
+.gauge-label{font:10px 'DM Mono',monospace;color:var(--muted);letter-spacing:.8px}
+.badge{display:inline-flex;align-items:center;padding:7px 12px;border-radius:10px;font-size:13px;font-weight:600;width:fit-content}
+.badge.fake{background:rgba(240,77,91,.15);color:var(--red);border:1px solid rgba(240,77,91,.3)}
+.badge.real{background:rgba(61,214,140,.12);color:var(--green);border:1px solid rgba(61,214,140,.25)}
+.bars{display:grid;gap:8px;margin-top:12px}
+.bar-row{display:grid;grid-template-columns:108px 1fr 42px;gap:8px;align-items:center;font-size:11px}
+.bar-name,.section-title{font:10px 'DM Mono',monospace;color:var(--muted);letter-spacing:.8px;text-transform:uppercase}
+.track{height:5px;background:var(--border);border-radius:999px;overflow:hidden}
+.fill{height:100%;transition:width .7s ease}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.metric strong{display:block;font-size:22px}
+.metric span{display:block;margin-top:4px}
+.list{display:grid;gap:8px}
+.item{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.5}
+.dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none}
+.score{font:10px 'DM Mono',monospace;color:var(--muted);white-space:nowrap}
+#wordcloud{min-height:150px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;position:relative}
+.wc{display:inline-block;margin:4px 5px;font-weight:600}
+.scan{display:none;position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--blue),transparent);animation:scan .8s linear infinite}
+#wordcloud.scanning .scan{display:block}
+#wordcloud.scanning .content{opacity:.35}
+.chart{display:grid;gap:8px}
+.chart .row{display:grid;gap:4px}
+.meta{display:flex;justify-content:space-between;font:10px 'DM Mono',monospace}
+.meta span:first-child{color:var(--slate)}
+@keyframes scan{0%{top:0}100%{top:100%}}
+@media (max-width:1100px){body{overflow:auto}#app{height:auto;min-height:100vh}#main{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}#right{border-left:none;border-top:1px solid var(--border)}}
+@media (max-width:720px){#sidebar{display:none}#center,#right{padding:18px}.verdict{grid-template-columns:1fr}.bar-row{grid-template-columns:92px 1fr 40px}}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="logo"><svg viewBox="0 0 24 24" stroke="white"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+    <div class="nav-item active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+  </aside>
+
+  <main id="main">
+    <section id="center">
+      <div class="top-bar">
+        <div>
+          <h1>Fake News Detection</h1>
+          <div class="subtitle">// VERIFAI INTELLIGENCE PLATFORM</div>
+        </div>
+        <div class="pills">
+          <span class="pill live" id="api-pill">API LIVE</span>
+          <span class="pill info" id="model-pill">MODEL READY</span>
+          <span class="pill warn" id="meta-pill">METRICS LOADING</span>
+        </div>
+      </div>
+
+      <div id="banner" class="banner"></div>
+
+      <div class="card">
+        <div class="label">// INPUT ARTICLE OR CLAIM</div>
+        <div class="stack">
+          <input id="title" placeholder="Optional headline or title">
+          <textarea id="text" placeholder="Paste a news article, headline, or claim to analyze...">Scientists confirm that drinking coffee backwards reverses aging by 40 years, according to a new study funded by the International Beverage Institute. The miracle discovery, which has been suppressed by Big Pharma for decades, was revealed exclusively by anonymous insider sources.</textarea>
+        </div>
+        <div class="actions">
+          <div>
+            <div id="chars" class="mono">0 characters</div>
+            <div class="mono">This page calls the local FastAPI endpoints directly.</div>
+          </div>
+          <button id="analyze">ANALYZE</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">// VERDICT</div>
+        <div class="verdict">
+          <div id="gauge-wrap">
+            <canvas id="gauge" width="130" height="130"></canvas>
+            <div class="gauge-center">
+              <div id="gauge-pct" class="gauge-pct">--</div>
+              <div id="gauge-label" class="gauge-label">WAITING</div>
+            </div>
+          </div>
+          <div>
+            <div id="badge" class="badge fake">NO ANALYSIS YET</div>
+            <div class="bars">
+              <div class="bar-row"><span class="bar-name">Fake probability</span><div class="track"><div id="fake-fill" class="fill" style="width:0%;background:var(--red)"></div></div><span id="fake-val" class="score">0%</span></div>
+              <div class="bar-row"><span class="bar-name">Real probability</span><div class="track"><div id="real-fill" class="fill" style="width:0%;background:var(--green)"></div></div><span id="real-val" class="score">0%</span></div>
+              <div class="bar-row"><span class="bar-name">Model confidence</span><div class="track"><div id="conf-fill" class="fill" style="width:0%;background:var(--blue2)"></div></div><span id="conf-val" class="score">0%</span></div>
+              <div class="bar-row"><span class="bar-name">Explain coverage</span><div class="track"><div id="coverage-fill" class="fill" style="width:0%;background:var(--amber)"></div></div><span id="coverage-val" class="score">0%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics">
+        <div class="metric"><strong id="metric-acc" style="color:var(--blue2)">--</strong><div class="bar-name">Validation accuracy</div><span id="metric-data" class="mono">Dataset size unavailable</span></div>
+        <div class="metric"><strong id="metric-f1" style="color:var(--green)">--</strong><div class="bar-name">Validation F1</div><span id="metric-model" class="mono">Model metadata unavailable</span></div>
+        <div class="metric"><strong id="metric-time" style="color:var(--amber)">--</strong><div class="bar-name">Latest analysis time</div><span id="metric-last" class="mono">No request yet</span></div>
+      </div>
+
+      <div class="card">
+        <div class="label">// SOURCE OR EVIDENCE CUES</div>
+        <div id="sources" class="list"></div>
+      </div>
+    </section>
+
+    <aside id="right">
+      <div style="margin-bottom:20px">
+        <div class="section-title">// KEY TERMS</div>
+        <div id="wordcloud"><div class="scan"></div><div class="content" id="words"></div></div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div class="section-title">// TEXT SIGNALS</div>
+        <div id="signals-chart" class="chart"></div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div class="section-title">// DETECTION SIGNALS</div>
+        <div id="signal-list" class="list"></div>
+      </div>
+
+      <div>
+        <div class="section-title">// TOP INFLUENTIAL SENTENCES</div>
+        <div id="explanations" class="list"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const titleEl = $('title');
+const textEl = $('text');
+const btn = $('analyze');
+const stopWords = new Set(['the','and','that','this','with','from','were','have','been','they','their','about','into','after','before','would','there','which','when','what','where','while','than','them','said','says','according','new','study','report','reports','more','over','also','only','just','very','many','much','some','such','anonymous','sources','source','claim','claims','article','headline']);
+
+const sourcePatterns = [
+  { name: 'Reuters', regex: /\breuters\b/i, score: 95, color: '#3dd68c' },
+  { name: 'Associated Press', regex: /\bassociated press\b|\bap\b/i, score: 92, color: '#3dd68c' },
+  { name: 'BBC', regex: /\bbbc\b/i, score: 90, color: '#3dd68c' },
+  { name: 'Anonymous sources', regex: /\banonymous\b|\binsider\b/i, score: 12, color: '#f04d5b' },
+  { name: 'Suppression narrative', regex: /\bsuppressed\b|\bcover[ -]?up\b/i, score: 8, color: '#f04d5b' },
+  { name: 'Peer-reviewed study', regex: /\bpeer-reviewed\b|\bjournal\b/i, score: 82, color: '#3d8ef0' }
+];
+
+const signalRules = [
+  { label: 'Anonymous or unverifiable sourcing', regex: /\banonymous\b|\binsider\b|\bunverified\b/i, color: '#f04d5b' },
+  { label: 'Suppression or conspiracy framing', regex: /\bsuppressed\b|\bcover[ -]?up\b|\bdeep state\b/i, color: '#f04d5b' },
+  { label: 'Extraordinary claim language', regex: /\bmiracle\b|\bshocking\b|\bsecret\b|\bguaranteed\b|\breverses aging\b/i, color: '#f0a23d' },
+  { label: 'Named institutional sourcing', regex: /\breuters\b|\bbbc\b|\bassociated press\b|\bcdc\b|\bgovernment\b/i, color: '#3dd68c' },
+  { label: 'Specific numbers or dates', regex: /\b\d{1,4}\b|\bjan\b|\bfeb\b|\bmar\b|\bapr\b|\bmay\b|\bjune?\b|\bjuly?\b|\baug\b|\bsept?\b|\boct\b|\bnov\b|\bdec\b/i, color: '#3d8ef0' }
+];
+
+const chartSignals = [
+  { label: 'Fear / alarm', color: '#f04d5b', words: ['danger','panic','crisis','fear','threat','urgent','alarming'] },
+  { label: 'Sensationalism', color: '#f04d5b', words: ['shocking','miracle','explosive','secret','exclusive','unbelievable'] },
+  { label: 'Conspiracy framing', color: '#f0a23d', words: ['suppressed','cover-up','deep state','hidden','insider','pharma'] },
+  { label: 'Emotional language', color: '#f0a23d', words: ['outrage','terrifying','amazing','disaster','corrupt','evil'] },
+  { label: 'Neutral / factual', color: '#8ba4c8', words: ['said','reported','according','data','official','department'] },
+  { label: 'Scientific language', color: '#3dd68c', words: ['study','evidence','trial','peer-reviewed','research','analysis'] }
+];
+
+function esc(v){return v.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;')}
+function pct(v){return `${Math.round(v*100)}%`}
+function setBanner(msg='',err=false){
+  const el=$('banner');
+  if(!msg){el.className='banner';el.textContent='';return}
+  el.className='banner show';
+  el.style.background=err?'rgba(240,77,91,.12)':'rgba(61,142,240,.08)';
+  el.style.border='1px solid ' + (err?'rgba(240,77,91,.25)':'rgba(61,142,240,.2)');
+  el.style.color=err?'#ffd7dc':'#cfe3ff';
+  el.textContent=msg;
+}
+function updateChars(){$('chars').textContent=`${(`${titleEl.value} ${textEl.value}`).trim().length} characters`}
+function setBar(id,val,color){$(id+'-fill').style.width=`${val}%`;$(id+'-fill').style.background=color;$(id+'-val').textContent=`${val}%`}
+
+function drawGauge(pct,color){
+  const c=$('gauge'),ctx=c.getContext('2d'),cx=65,cy=65,r=52;
+  ctx.clearRect(0,0,130,130);
+  ctx.beginPath();ctx.arc(cx,cy,r,Math.PI*.75,Math.PI*2.25);ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=8;ctx.lineCap='round';ctx.stroke();
+  const end=Math.PI*.75+(pct/100)*Math.PI*1.5;
+  ctx.beginPath();ctx.arc(cx,cy,r,Math.PI*.75,end);ctx.strokeStyle=color;ctx.lineWidth=8;ctx.lineCap='round';ctx.stroke();
+}
+
+function wordCloud(text, topSentences){
+  const words=((text+' '+topSentences.map(x=>x.sentence).join(' ')).toLowerCase().match(/[a-z][a-z-]{2,}/g)||[]);
+  const counts=new Map();
+  for(const word of words){if(stopWords.has(word)) continue;counts.set(word,(counts.get(word)||0)+1)}
+  return [...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,14).map(([word,count],i)=>({text:word.toUpperCase(),size:12+Math.min(count*2+i%3,12),color:i<4?'#f04d5b':i<8?'#f0a23d':'#8ba4c8'}))
+}
+
+function renderWords(items){
+  $('words').innerHTML=items.length?items.map(x=>`<span class="wc" style="font-size:${x.size}px;color:${x.color}">${esc(x.text)}</span>`).join(''):'<span class="mono">No standout terms yet.</span>'
+}
+
+function renderSources(text){
+  const matches=sourcePatterns.filter(x=>x.regex.test(text)).slice(0,4);
+  const rows=matches.length?matches:[{name:'No explicit source cues found',score:40,color:'#f0a23d'},{name:'Review article context manually',score:50,color:'#3d8ef0'}];
+  $('sources').innerHTML=rows.map(x=>`<div class="item"><div class="dot" style="background:${x.color}"></div><div style="flex:1"><div>${esc(x.name)}</div><div style="margin-top:6px;height:4px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden"><div style="width:${x.score}%;height:100%;background:${x.color}"></div></div></div><div class="score">${String(x.score).padStart(2,'0')}/100</div></div>`).join('')
+}
+
+function countMatches(text, words){
+  return words.reduce((sum,word)=>sum+((text.match(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'))||[]).length),0)
+}
+
+function renderChart(text){
+  const lower=text.toLowerCase(),tokens=lower.match(/[a-z][a-z-]{1,}/g)||[],den=Math.max(tokens.length,20);
+  $('signals-chart').innerHTML=chartSignals.map(x=>{const raw=countMatches(lower,x.words),val=Math.min(100,Math.round(raw/den*450));return `<div class="row"><div class="meta"><span>${esc(x.label)}</span><span>${val}%</span></div><div class="track"><div class="fill" style="width:${val}%;background:${x.color}"></div></div></div>`}).join('')
+}
+
+function renderSignals(text,prediction,explanation){
+  const rows=signalRules.filter(x=>x.regex.test(text)).map(x=>({text:x.label,color:x.color}));
+  if(prediction.label==='FAKE'&&prediction.confidence>.7) rows.unshift({text:`Model strongly favors FAKE (${pct(prediction.confidence)})`,color:'#f04d5b'});
+  if(prediction.label==='REAL'&&prediction.confidence>.7) rows.unshift({text:`Model strongly favors REAL (${pct(prediction.confidence)})`,color:'#3dd68c'});
+  if(explanation.truncated_for_explanation) rows.push({text:'Explanation was truncated to the first sentences for speed',color:'#f0a23d'});
+  const finalRows=rows.length?rows:[{text:'No obvious heuristic text cues detected. Use the model verdict with manual review.',color:'#3d8ef0'}];
+  $('signal-list').innerHTML=finalRows.slice(0,6).map(x=>`<div class="item"><div class="dot" style="background:${x.color}"></div><div>${esc(x.text)}</div></div>`).join('')
+}
+
+function renderExplanations(explanation){
+  const rows=explanation.top_sentences||[];
+  $('explanations').innerHTML=rows.length?rows.map(x=>`<div class="item"><div class="dot" style="background:${x.confidence_drop>=0?'#3d8ef0':'#8ba4c8'}"></div><div style="flex:1">${esc(x.sentence)}</div><div class="score">${x.confidence_drop>=0?'+':''}${(x.confidence_drop*100).toFixed(1)}%</div></div>`).join(''):'<div class="mono">No explanation output available.</div>'
+}
+
+function updateVerdict(pred,exp){
+  const confidence=Math.round(pred.confidence*100),isFake=pred.label==='FAKE',color=isFake?'#f04d5b':'#3dd68c';
+  drawGauge(confidence,color);
+  $('gauge-pct').textContent=`${confidence}%`;
+  $('gauge-pct').style.color=color;
+  $('gauge-label').textContent=isFake?'FAKE RISK':'REAL SIGNAL';
+  $('badge').className=`badge ${isFake?'fake':'real'}`;
+  $('badge').textContent=isFake?'LIKELY FABRICATED':'LIKELY CREDIBLE';
+  setBar('fake',Math.round((pred.prob_fake||0)*100),'#f04d5b');
+  setBar('real',Math.round((pred.prob_real||0)*100),'#3dd68c');
+  setBar('conf',confidence,'#5ba3ff');
+  setBar('coverage',Math.min(100,Math.round((exp.analyzed_sentences/12)*100)),'#f0a23d');
+}
+
+async function refreshHealth(){
+  try{
+    const [healthRes,metaRes]=await Promise.all([fetch('/health'),fetch('/metadata')]);
+    const health=await healthRes.json();
+    const meta=await metaRes.json();
+    $('api-pill').textContent=health.status==='ok'?'API LIVE':'API DOWN';
+    $('model-pill').textContent=health.model_ready?'MODEL READY':'MODEL NOT READY';
+    if(!health.model_ready) setBanner('The API is running, but model/ is missing a trained model. Train the model before using the dashboard.',true);
+    if(meta.available){
+      const m=meta.metadata.metrics||{};
+      $('meta-pill').textContent='METRICS LOADED';
+      $('metric-acc').textContent=m.eval_accuracy?`${Math.round(m.eval_accuracy*1000)/10}%`:'--';
+      $('metric-f1').textContent=m.eval_f1?`${Math.round(m.eval_f1*1000)/10}%`:'--';
+      $('metric-data').textContent=`Rows: ${meta.metadata.dataset_size||'--'} | Val: ${meta.metadata.validation_size||'--'}`;
+      $('metric-model').textContent=meta.metadata.model_name||'metadata found';
+    }else{
+      $('meta-pill').textContent='METRICS MISSING';
+    }
+  }catch(err){
+    $('api-pill').textContent='API ERROR';
+    $('model-pill').textContent='MODEL UNKNOWN';
+    $('meta-pill').textContent='METRICS ERROR';
+    setBanner(`Could not reach the API: ${err.message}`,true);
+  }
+}
+
+async function analyze(){
+  const title=titleEl.value.trim(),text=textEl.value.trim();
+  if(!text){setBanner('Paste article text before running analysis.',true);return}
+  btn.disabled=true;btn.textContent='ANALYZING...';$('wordcloud').classList.add('scanning');setBanner('');
+  const started=performance.now();
+  try{
+    const [predRes,expRes]=await Promise.all([
+      fetch('/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text,max_length:256})}),
+      fetch('/explain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text,max_length:256,top_k:5,max_sentences:12})})
+    ]);
+    if(!predRes.ok||!expRes.ok) throw new Error(!predRes.ok?await predRes.text():await expRes.text());
+    const pred=await predRes.json(),exp=await expRes.json(),combined=`${title} ${text}`,elapsed=((performance.now()-started)/1000).toFixed(2);
+    updateVerdict(pred,exp);
+    renderWords(wordCloud(combined,exp.top_sentences||[]));
+    renderSources(combined);
+    renderChart(combined);
+    renderSignals(combined,pred,exp);
+    renderExplanations(exp);
+    $('metric-time').textContent=`${elapsed}s`;
+    $('metric-last').textContent=`${pred.label} at ${pct(pred.confidence)}`;
+    setBanner(`Analysis complete. Model verdict: ${pred.label} with ${pct(pred.confidence)} confidence.`);
+  }catch(err){
+    setBanner(`Analysis failed: ${err.message}`,true);
+  }finally{
+    btn.disabled=false;btn.textContent='ANALYZE';$('wordcloud').classList.remove('scanning');
+  }
+}
+
+titleEl.addEventListener('input',updateChars);
+textEl.addEventListener('input',updateChars);
+btn.addEventListener('click',analyze);
+drawGauge(0,'#8ba4c8');updateChars();renderWords([]);renderSources('');renderChart(textEl.value);renderSignals(textEl.value,{label:'FAKE',confidence:0},{top_sentences:[],truncated_for_explanation:false});renderExplanations({top_sentences:[]});refreshHealth();
+</script>
+</body>
+</html>
