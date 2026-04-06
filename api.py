@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -13,6 +14,13 @@ from predict_distilbert import predict
 
 
 app = FastAPI(title="Fake News Detection API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class ArticleRequest(BaseModel):

@@ -249,7 +249,8 @@ const textEl = $('text');
 const btn = $('analyze');
 const queryApiBase = new URLSearchParams(window.location.search).get('api');
 if (queryApiBase) localStorage.setItem('verifai_api_base', queryApiBase.replace(/\/$/, ''));
-const API_BASE = (queryApiBase || window.VERIFAI_API_BASE || localStorage.getItem('verifai_api_base') || '').replace(/\/$/, '');
+const configuredApiBase = (queryApiBase || window.VERIFAI_API_BASE || localStorage.getItem('verifai_api_base') || '').replace(/\/$/, '');
+let activeApiBase = '';
 const stopWords = new Set(['the','and','that','this','with','from','were','have','been','they','their','about','into','after','before','would','there','which','when','what','where','while','than','them','said','says','according','new','study','report','reports','more','over','also','only','just','very','many','much','some','such','anonymous','sources','source','claim','claims','article','headline']);
 
 const sourcePatterns = [
@@ -281,6 +282,7 @@ const chartSignals = [
 function esc(v){return v.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;')}
 function pct(v){return `${Math.round(v*100)}%`}
 function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+function normalizeBase(value){return (value||'').replace(/\/$/,'')}
 function setBanner(msg='',err=false){
   const el=$('banner');
   if(!msg){el.className='banner';el.textContent='';return}
@@ -345,6 +347,37 @@ function splitSentences(text){
   return text.split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(Boolean)
 }
 
+function getApiCandidates(){
+  if(configuredApiBase) return [configuredApiBase];
+  const candidates=[];
+  const add=value=>{
+    const normalized=normalizeBase(value);
+    if(!normalized||candidates.includes(normalized)) return;
+    candidates.push(normalized);
+  };
+  if(/^https?:$/.test(window.location.protocol)){
+    add(window.location.origin);
+    if((window.location.hostname==='127.0.0.1'||window.location.hostname==='localhost')&&window.location.port!=='8000'){
+      add(`${window.location.protocol}//${window.location.hostname}:8000`);
+    }
+  }
+  add('http://127.0.0.1:8000');
+  add('http://localhost:8000');
+  return candidates;
+}
+
+function enableDemoMode(message,isError=false){
+  activeApiBase='';
+  $('api-pill').textContent='FRONTEND ONLY';
+  $('model-pill').textContent='DEMO MODE';
+  $('meta-pill').textContent='NO BACKEND';
+  $('metric-acc').textContent='Demo';
+  $('metric-f1').textContent='Demo';
+  $('metric-data').textContent='Static dashboard with local demo fallback';
+  $('metric-model').textContent='Backend auto-detect failed. Use ?api=https://your-backend-url to force a live API.';
+  setBanner(message,isError);
+}
+
 function demoAnalyze(title,text){
   const combined=`${title} ${text}`.trim()
   const lower=combined.toLowerCase()
@@ -385,40 +418,45 @@ function updateVerdict(pred,exp){
 }
 
 async function refreshHealth(){
-  if(!API_BASE){
-    $('api-pill').textContent='FRONTEND ONLY';
-    $('model-pill').textContent='DEMO MODE';
-    $('meta-pill').textContent='NO BACKEND';
-    $('metric-acc').textContent='Demo';
-    $('metric-f1').textContent='Demo';
-    $('metric-data').textContent='Static Vercel frontend deployment';
-    $('metric-model').textContent='Add ?api=https://your-backend-url to connect a live model';
-    setBanner('Running in frontend-only demo mode. To use a real model API later, open this site with ?api=https://your-backend-url');
-    return;
-  }
-  try{
-    const [healthRes,metaRes]=await Promise.all([fetch(`${API_BASE}/health`),fetch(`${API_BASE}/metadata`)]);
-    const health=await healthRes.json();
-    const meta=await metaRes.json();
-    $('api-pill').textContent=health.status==='ok'?'API LIVE':'API DOWN';
-    $('model-pill').textContent=health.model_ready?'MODEL READY':'MODEL NOT READY';
-    if(!health.model_ready) setBanner('The API is running, but model/ is missing a trained model. Train the model before using the dashboard.',true);
-    if(meta.available){
-      const m=meta.metadata.metrics||{};
-      $('meta-pill').textContent='METRICS LOADED';
-      $('metric-acc').textContent=m.eval_accuracy?`${Math.round(m.eval_accuracy*1000)/10}%`:'--';
-      $('metric-f1').textContent=m.eval_f1?`${Math.round(m.eval_f1*1000)/10}%`:'--';
-      $('metric-data').textContent=`Rows: ${meta.metadata.dataset_size||'--'} | Val: ${meta.metadata.validation_size||'--'}`;
-      $('metric-model').textContent=meta.metadata.model_name||'metadata found';
-    }else{
-      $('meta-pill').textContent='METRICS MISSING';
+  const candidates=getApiCandidates();
+  let lastError=null;
+  for(const candidate of candidates){
+    try{
+      const [healthRes,metaRes]=await Promise.all([fetch(`${candidate}/health`),fetch(`${candidate}/metadata`)]);
+      if(!healthRes.ok) continue;
+      const health=await healthRes.json();
+      const meta=metaRes.ok?await metaRes.json():{available:false};
+      activeApiBase=candidate;
+      $('api-pill').textContent=health.status==='ok'?'API LIVE':'API DOWN';
+      $('model-pill').textContent=health.model_ready?'MODEL READY':'MODEL NOT READY';
+      if(meta.available){
+        const m=meta.metadata.metrics||{};
+        $('meta-pill').textContent='METRICS LOADED';
+        $('metric-acc').textContent=m.eval_accuracy?`${Math.round(m.eval_accuracy*1000)/10}%`:'--';
+        $('metric-f1').textContent=m.eval_f1?`${Math.round(m.eval_f1*1000)/10}%`:'--';
+        $('metric-data').textContent=`Rows: ${meta.metadata.dataset_size||'--'} | Val: ${meta.metadata.validation_size||'--'}`;
+        $('metric-model').textContent=meta.metadata.model_name||candidate;
+      }else{
+        $('meta-pill').textContent='METRICS MISSING';
+        $('metric-acc').textContent='--';
+        $('metric-f1').textContent='--';
+        $('metric-data').textContent='Metadata file not found';
+        $('metric-model').textContent=candidate;
+      }
+      if(!health.model_ready){
+        setBanner(`Connected to ${candidate}, but model/ is missing a trained model. Train the model before using the dashboard.`,true);
+      }else{
+        setBanner(`Connected to live API at ${candidate}. Override it anytime with ?api=https://your-backend-url`);
+      }
+      return;
+    }catch(err){
+      lastError=err;
     }
-  }catch(err){
-    $('api-pill').textContent='API ERROR';
-    $('model-pill').textContent='MODEL UNKNOWN';
-    $('meta-pill').textContent='METRICS ERROR';
-    setBanner(`Could not reach the API: ${err.message}`,true);
   }
+  const fallbackMessage=configuredApiBase
+    ? `Could not reach the configured API at ${configuredApiBase}. Falling back to frontend-only demo mode.`
+    : `No live API detected. Running in frontend-only demo mode. Add ?api=https://your-backend-url to force a backend.`;
+  enableDemoMode(lastError?`${fallbackMessage} ${lastError.message}`:fallbackMessage,Boolean(configuredApiBase));
 }
 
 async function analyze(){
@@ -427,7 +465,7 @@ async function analyze(){
   btn.disabled=true;btn.textContent='ANALYZING...';$('wordcloud').classList.add('scanning');setBanner('');
   const started=performance.now();
   try{
-    if(!API_BASE){
+    if(!activeApiBase){
       const {prediction:pred,explanation:exp}=demoAnalyze(title,text),combined=`${title} ${text}`,elapsed=((performance.now()-started)/1000).toFixed(2);
       updateVerdict(pred,exp);
       renderWords(wordCloud(combined,exp.top_sentences||[]));
@@ -441,8 +479,8 @@ async function analyze(){
       return;
     }
     const [predRes,expRes]=await Promise.all([
-      fetch(`${API_BASE}/predict`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text,max_length:256})}),
-      fetch(`${API_BASE}/explain`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text,max_length:256,top_k:5,max_sentences:12})})
+      fetch(`${activeApiBase}/predict`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text,max_length:256})}),
+      fetch(`${activeApiBase}/explain`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text,max_length:256,top_k:5,max_sentences:12})})
     ]);
     if(!predRes.ok||!expRes.ok) throw new Error(!predRes.ok?await predRes.text():await expRes.text());
     const pred=await predRes.json(),exp=await expRes.json(),combined=`${title} ${text}`,elapsed=((performance.now()-started)/1000).toFixed(2);
