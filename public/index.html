@@ -178,7 +178,7 @@ button:disabled{opacity:.55;cursor:wait}
         <div class="actions">
           <div>
             <div id="chars" class="mono">0 characters</div>
-            <div class="mono">Frontend-only mode works by default. Add <code>?api=https://your-backend-url</code> to connect a real API later.</div>
+            <div class="mono">Connected to the deployed API by default. Add <code>?api=https://your-backend-url</code> to override it.</div>
           </div>
           <button id="analyze">ANALYZE</button>
         </div>
@@ -247,6 +247,7 @@ const $ = id => document.getElementById(id);
 const titleEl = $('title');
 const textEl = $('text');
 const btn = $('analyze');
+const DEFAULT_DEPLOYED_API_BASE = 'https://verifai-1zbz.onrender.com';
 const queryApiBase = new URLSearchParams(window.location.search).get('api');
 if (queryApiBase) localStorage.setItem('verifai_api_base', queryApiBase.replace(/\/$/, ''));
 const configuredApiBase = (queryApiBase || window.VERIFAI_API_BASE || localStorage.getItem('verifai_api_base') || '').replace(/\/$/, '');
@@ -356,11 +357,17 @@ function getApiCandidates(){
     candidates.push(normalized);
   };
   if(/^https?:$/.test(window.location.protocol)){
-    add(window.location.origin);
+    if(window.location.hostname==='127.0.0.1'||window.location.hostname==='localhost'){
+      add(window.location.origin);
+    }else{
+      add(DEFAULT_DEPLOYED_API_BASE);
+      add(window.location.origin);
+    }
     if((window.location.hostname==='127.0.0.1'||window.location.hostname==='localhost')&&window.location.port!=='8000'){
       add(`${window.location.protocol}//${window.location.hostname}:8000`);
     }
   }
+  add(DEFAULT_DEPLOYED_API_BASE);
   add('http://127.0.0.1:8000');
   add('http://localhost:8000');
   return candidates;
@@ -374,7 +381,7 @@ function enableDemoMode(message,isError=false){
   $('metric-acc').textContent='Demo';
   $('metric-f1').textContent='Demo';
   $('metric-data').textContent='Static dashboard with local demo fallback';
-  $('metric-model').textContent='Backend auto-detect failed. Use ?api=https://your-backend-url to force a live API.';
+  $('metric-model').textContent=`Backend auto-detect failed. Default API: ${DEFAULT_DEPLOYED_API_BASE}`;
   setBanner(message,isError);
 }
 
@@ -455,7 +462,7 @@ async function refreshHealth(){
   }
   const fallbackMessage=configuredApiBase
     ? `Could not reach the configured API at ${configuredApiBase}. Falling back to frontend-only demo mode.`
-    : `No live API detected. Running in frontend-only demo mode. Add ?api=https://your-backend-url to force a backend.`;
+    : `No live API detected. Tried ${DEFAULT_DEPLOYED_API_BASE} and local backends, so the dashboard is running in frontend-only demo mode.`;
   enableDemoMode(lastError?`${fallbackMessage} ${lastError.message}`:fallbackMessage,Boolean(configuredApiBase));
 }
 
