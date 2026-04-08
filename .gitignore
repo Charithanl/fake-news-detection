@@ -1,7 +1,7 @@
 venv/
 __pycache__/
 data/
-model/
+model/checkpoint-113/
 *.pt
 *.bin
 *.h5
